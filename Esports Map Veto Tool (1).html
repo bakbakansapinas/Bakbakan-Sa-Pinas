@@ -1,0 +1,1777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Esports Map Veto Tool - BAKBAKAN SA PINAS</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;600;700&family=Rajdhani:wght@500;600;700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Tone.js for Sound Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        valRed: '#FF4655',
+                        valDark: '#0F1923',
+                        valNavy: '#111C24',
+                        valPanel: '#1F2326',
+                        valAccent: '#00F0FF',
+                        valGold: '#ECE8E1',
+                        valPick: '#10B981',
+                        valBan: '#EF4444',
+                        valDecider: '#F59E0B'
+                    },
+                    fontFamily: {
+                        display: ['Teko', 'sans-serif'],
+                        tech: ['Rajdhani', 'sans-serif'],
+                        sans: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #0B0E14;
+            color: #ECE8E1;
+            font-family: 'Rajdhani', sans-serif;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        /* Scanline Overlay */
+        .scanline {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0, 0, 0, 0.3) 50%,
+                rgba(0, 0, 0, 0.3)
+            );
+            background-size: 100% 4px;
+        }
+
+        /* OBS Mode Styles */
+        body.obs-mode {
+            background-color: transparent !important;
+            background-image: none !important;
+        }
+        body.obs-mode .fixed-bg, body.obs-mode header, body.obs-mode #roleBanner, body.obs-mode footer, body.obs-mode #nonObsPanel {
+            display: none !important;
+        }
+
+        /* Glowing Effects */
+        .glow-red {
+            box-shadow: 0 0 20px rgba(255, 70, 85, 0.4);
+        }
+        .glow-cyan {
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+        }
+        .glow-gold {
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+        }
+
+        /* Clip path accents */
+        .cut-corner-tl {
+            clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
+        }
+        .cut-corner-br {
+            clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0F1923;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #FF4655;
+            border-radius: 3px;
+        }
+
+        /* Animated Pulsing border for active turn */
+        @keyframes borderPulse {
+            0%, 100% { border-color: rgba(255, 70, 85, 1); box-shadow: 0 0 15px rgba(255, 70, 85, 0.5); }
+            50% { border-color: rgba(255, 70, 85, 0.3); box-shadow: 0 0 5px rgba(255, 70, 85, 0.1); }
+        }
+        .active-team-card {
+            animation: borderPulse 2s infinite ease-in-out;
+        }
+
+        /* Glassmorphism */
+        .glass-panel {
+            background: rgba(15, 25, 35, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .map-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .map-card:hover:not(.disabled) {
+            transform: translateY(-8px) scale(1.02);
+        }
+
+        /* Coin Toss Animation */
+        .coin {
+            width: 100px;
+            height: 100px;
+            transform-style: preserve-3d;
+            transition: transform 3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .coin-front, .coin-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: bold;
+            box-shadow: 0 0 20px rgba(255,255,255,0.2);
+        }
+        .coin-front {
+            background: linear-gradient(135deg, #FF4655, #880015);
+            color: white;
+            border: 4px solid #FFAAA0;
+        }
+        .coin-back {
+            background: linear-gradient(135deg, #00F0FF, #005588);
+            color: white;
+            transform: rotateY(180deg);
+            border: 4px solid #A0F0FF;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between bg-[#080B10] text-gray-100 relative overflow-y-auto">
+
+    <!-- ACCESS CODE MODAL OVERLAY -->
+    <div id="accessCodeModal" class="fixed inset-0 z-50 bg-black/95 backdrop-blur-lg flex items-center justify-center p-4">
+        <div class="bg-valDark border border-valRed/40 rounded-xl w-full max-w-md p-6 text-center shadow-2xl relative cut-corner-tl">
+            <div class="bg-valRed/20 text-valRed w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-valRed/40">
+                <i class="fa-solid fa-users-viewfinder text-2xl"></i>
+            </div>
+            <h3 class="font-display text-3xl text-white tracking-wider uppercase mb-1">
+                TEAM LOBBY CHECK-IN
+            </h3>
+            <p class="text-xs font-tech text-gray-400 uppercase tracking-widest mb-6">
+                ENTER ACCESS CODE & SELECT YOUR ROLE
+            </p>
+
+            <form onsubmit="verifyAccessCode(event)" class="space-y-4">
+                <div>
+                    <label class="block text-left text-xs text-gray-400 uppercase mb-1">Select Joining Role / Team</label>
+                    <select id="loginRoleSelect" class="w-full bg-valPanel border border-white/20 rounded px-3 py-2.5 text-sm text-white font-tech uppercase focus:outline-none focus:border-valRed cursor-pointer">
+                        <option value="team1">Team A Captain</option>
+                        <option value="team2">Team B Captain</option>
+                        <option value="moderator" selected>Tournament Moderator / Admin</option>
+                        <option value="spectator">Spectator / Caster</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-left text-xs text-gray-400 uppercase mb-1">Veto Access Code</label>
+                    <input type="password" id="accessCodeInput" placeholder="Enter Code (e.g. VETO2026)" required
+                        class="w-full bg-valPanel border border-white/20 rounded px-4 py-2.5 text-center text-lg tracking-widest text-white focus:outline-none focus:border-valRed">
+                </div>
+                <div id="accessErrorMsg" class="text-xs text-valBan font-tech h-4 uppercase"></div>
+                <button type="submit" class="w-full py-3 bg-valRed hover:bg-red-600 text-white font-bold rounded text-sm font-tech uppercase tracking-widest transition shadow-lg">
+                    JOIN VETO ROOM
+                </button>
+            </form>
+            <div class="mt-4 text-[10px] text-gray-500 font-tech uppercase">
+                Default Access Code: <span class="text-valAccent font-bold">VETO2026</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Background Pattern & Lighting -->
+    <div class="fixed inset-0 pointer-events-none z-0 fixed-bg">
+        <div class="absolute -top-40 -left-40 w-96 h-96 bg-valRed/15 rounded-full blur-3xl"></div>
+        <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-valAccent/15 rounded-full blur-3xl"></div>
+        <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]"></div>
+        <div class="scanline absolute inset-0 opacity-30"></div>
+    </div>
+
+    <!-- Header / Navbar Controls -->
+    <header class="relative z-20 border-b border-white/10 bg-valDark/90 px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <div class="bg-valRed text-white p-2 rounded cut-corner-tl flex items-center justify-center">
+                <i class="fa-solid font-bold text-xl fa-shield-halved"></i>
+            </div>
+            <div>
+                <h1 class="font-display text-2xl tracking-wider leading-none uppercase text-white flex items-center gap-2">
+                    BAKBAKAN SA PINAS <span class="text-xs bg-white/10 text-valAccent px-2 py-0.5 rounded tracking-widest font-tech font-semibold">MAP VETO STAGE</span>
+                </h1>
+                <p class="text-xs text-gray-400 font-tech uppercase tracking-widest">Official Esports Tournament Ban, Pick & Side Selection System</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+            <!-- ROLE SELECTOR -->
+            <div class="flex items-center bg-valPanel border border-white/10 rounded overflow-hidden">
+                <span class="text-xs text-gray-400 font-tech px-2.5 uppercase border-r border-white/10"><i class="fa-solid fa-user-shield text-valAccent mr-1"></i> Access Role:</span>
+                <select id="roleSelect" class="bg-transparent text-xs font-tech tracking-wider uppercase px-2 py-1.5 text-white focus:outline-none cursor-pointer" onchange="changeRole()">
+                    <option value="moderator" selected>Moderator (Admin)</option>
+                    <option value="team1">Team A</option>
+                    <option value="team2">Team B</option>
+                    <option value="spectator">Spectator (Read-Only)</option>
+                </select>
+            </div>
+
+            <!-- Format Selector (Moderator Only) -->
+            <select id="formatSelect" class="bg-valPanel text-xs font-tech tracking-wider uppercase px-3 py-2 rounded border border-white/10 text-white focus:outline-none focus:border-valRed cursor-pointer" onchange="changeFormat()">
+                <option value="BO1">Best of 1 (BO1)</option>
+                <option value="BO3" selected>Best of 3 (BO3)</option>
+                <option value="BO5">Best of 5 (BO5)</option>
+            </select>
+
+            <!-- Preset Game Pool (Moderator Only) -->
+            <select id="gamePoolSelect" class="bg-valPanel text-xs font-tech tracking-wider uppercase px-3 py-2 rounded border border-white/10 text-white focus:outline-none focus:border-valRed cursor-pointer" onchange="loadGamePool()">
+                <option value="cf_sd" selected>CF Search & Destroy (10 Maps)</option>
+                <option value="custom">Custom Map Pool</option>
+            </select>
+
+            <!-- Coin Toss Button (Moderator Only) -->
+            <button onclick="openCoinTossModal()" id="coinTossBtn" class="bg-valAccent/20 hover:bg-valAccent text-valAccent hover:text-black border border-valAccent/40 px-3 py-2 rounded text-xs font-tech tracking-wider uppercase flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-coins"></i> Coin Toss
+            </button>
+
+            <!-- OBS Stream Mode Toggle (Moderator Only) -->
+            <button onclick="toggleOBSMode()" id="obsModeBtn" class="bg-purple-950/60 hover:bg-purple-800 text-purple-300 border border-purple-500/40 px-3 py-2 rounded text-xs font-tech tracking-wider uppercase flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-video"></i> OBS Overlay
+            </button>
+
+            <!-- Pause / Resume Timer Button -->
+            <button onclick="togglePauseTimer()" id="pauseTimerBtn" class="bg-valDecider/20 hover:bg-valDecider text-valDecider hover:text-black border border-valDecider/40 px-3 py-2 rounded text-xs font-tech tracking-wider uppercase flex items-center gap-2 transition">
+                <i class="fa-solid fa-pause" id="pauseTimerIcon"></i> <span id="pauseTimerText">Pause</span>
+            </button>
+
+            <!-- Custom Pool Editor Button -->
+            <button onclick="toggleCustomPoolModal()" id="customPoolBtn" class="bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-2 rounded text-xs font-tech tracking-wider uppercase flex items-center gap-2 transition">
+                <i class="fa-solid fa-map text-valDecider"></i> Custom Pool
+            </button>
+
+            <!-- Setup Teams -->
+            <button onclick="toggleConfigModal()" id="setupTeamsBtn" class="bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-2 rounded text-xs font-tech tracking-wider uppercase flex items-center gap-2 transition">
+                <i class="fa-solid fa-sliders text-valAccent"></i> Setup
+            </button>
+            <button onclick="exportVetoResultImage()" id="exportResultBtn" class="bg-valPick/20 hover:bg-valPick text-valPick hover:text-white border border-valPick/40 px-3 py-2 rounded text-xs font-tech tracking-wider uppercase flex items-center gap-2 transition" title="Export Results">
+                <i class="fa-solid fa-file-arrow-down"></i> Export
+            </button>
+            <button onclick="resetVeto()" id="resetVetoBtn" class="bg-valRed/20 hover:bg-valRed text-valRed hover:text-white border border-valRed/40 px-3 py-2 rounded text-xs font-tech tracking-wider uppercase flex items-center gap-2 transition">
+                <i class="fa-solid fa-rotate-right"></i> Reset
+            </button>
+
+            <!-- Voice TTS Switch -->
+            <button onclick="toggleVoiceAnnouncer()" id="voiceBtn" class="bg-white/5 hover:bg-white/10 border border-white/10 p-2 rounded text-xs transition" title="Toggle Voiceovers">
+                <i class="fa-solid fa-bullhorn text-valAccent"></i>
+            </button>
+            <!-- Audio FX Switch -->
+            <button onclick="toggleAudio()" id="audioBtn" class="bg-white/5 hover:bg-white/10 border border-white/10 p-2 rounded text-xs transition" title="Toggle Sound FX">
+                <i class="fa-solid fa-volume-high text-gray-300"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- OBS Mode Exit Overlay Floating Button -->
+    <button id="exitObsBtn" onclick="toggleOBSMode()" class="hidden fixed top-4 right-4 z-50 bg-valRed text-white px-4 py-2 rounded font-tech text-xs uppercase font-bold tracking-widest shadow-2xl hover:scale-105 transition">
+        <i class="fa-solid fa-arrow-left-long mr-2"></i> Exit OBS Mode
+    </button>
+
+    <!-- Role Info Banner -->
+    <div id="roleBanner" class="bg-valRed/10 border-b border-valRed/20 px-4 py-1.5 flex items-center justify-between text-xs font-tech uppercase tracking-widest text-valRed">
+        <span><i class="fa-solid fa-shield text-valRed mr-1"></i> CURRENT ROLE: <strong id="currentRoleText">MODERATOR (Full Administrative Access)</strong></span>
+        <span id="roleInstructionText" class="text-gray-400">Click any map or side option to override or execute turn decisions.</span>
+    </div>
+
+    <!-- Main Broadcast Interface -->
+    <main class="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 flex flex-col gap-6 justify-center">
+
+        <!-- Top Stage Banner / Match Header -->
+        <div class="glass-panel p-4 rounded-xl border border-white/10 relative overflow-hidden">
+            <!-- Header Background Glows -->
+            <div id="team1Glow" class="absolute left-0 top-0 bottom-0 w-1/3 bg-gradient-to-r from-valRed/20 to-transparent transition-opacity duration-500 opacity-100"></div>
+            <div id="team2Glow" class="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-valAccent/20 to-transparent transition-opacity duration-500 opacity-30"></div>
+
+            <div class="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4">
+                
+                <!-- TEAM A -->
+                <div id="team1Box" class="flex items-center gap-4 w-full md:w-5/12 p-3 rounded-lg border border-valRed/50 bg-valDark/80 active-team-card transition-all">
+                    <!-- Team A Logo -->
+                    <div class="w-12 h-12 flex-shrink-0 bg-valNavy border border-valRed/40 rounded-lg overflow-hidden flex items-center justify-center p-1 relative">
+                        <img id="team1LogoImg" src="https://placehold.co/100x100/FF4655/FFFFFF?text=A" class="w-full h-full object-contain" alt="Team A Logo" onerror="this.src='https://placehold.co/100x100/FF4655/FFFFFF?text=A'">
+                        <!-- Online Status Dot -->
+                        <span id="team1StatusDot" class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-red-500 border-2 border-valDark" title="Team A Offline"></span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span id="team1ActionBadge" class="text-xs px-2 py-0.5 bg-white/10 text-gray-300 rounded font-tech tracking-widest uppercase">FIRST PICK</span>
+                            <span id="team1PresenceBadge" class="text-[10px] px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded font-tech">OFFLINE</span>
+                        </div>
+                        <h2 id="team1Name" class="font-display text-3xl font-bold uppercase tracking-wider text-white truncate">GLOBAL RISK</h2>
+                        <div id="team1Roster" class="text-xs text-gray-400 font-tech truncate">
+                            Sniper1 • Rifler2 • Captain3 • Entry4 • Support5
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span id="team1BansCount" class="block font-display text-2xl text-valBan font-bold leading-none">0 BANS</span>
+                        <span id="team1PicksCount" class="block font-display text-2xl text-valPick font-bold leading-none">0 PICKS</span>
+                    </div>
+                </div>
+
+                <!-- TIMER & STATUS CENTER -->
+                <div class="flex flex-col items-center justify-center text-center w-full md:w-2/12 py-2">
+                    <div class="font-tech text-xs tracking-widest uppercase text-gray-400 mb-1" id="phaseIndicator">ROUND 1: BAN PHASE</div>
+                    
+                    <!-- Moderator Start Veto Gate Button -->
+                    <div id="startVetoGateContainer" class="my-1 hidden">
+                        <button onclick="startOfficialVeto()" class="bg-valPick hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded text-xs font-tech uppercase tracking-wider shadow-lg animate-pulse flex items-center gap-1">
+                            <i class="fa-solid fa-play"></i> START VETO
+                        </button>
+                    </div>
+
+                    <div id="timerDisplayContainer" class="hidden relative flex items-center justify-center">
+                        <svg class="w-20 h-20 transform -rotate-90">
+                            <circle cx="40" cy="40" r="34" stroke="currentColor" stroke-width="4" class="text-white/10" fill="transparent"/>
+                            <circle id="timerCircle" cx="40" cy="40" r="34" stroke="currentColor" stroke-width="4" class="text-valRed transition-all duration-1000" fill="transparent" stroke-dasharray="213.6" stroke-dashoffset="0"/>
+                        </svg>
+                        <span id="timerText" class="absolute font-display text-3xl font-bold tracking-tighter text-white">30</span>
+                    </div>
+
+                    <div id="statusSubtext" class="text-xs text-valAccent font-tech tracking-wider uppercase mt-1">
+                        CLICK 'START VETO' TO BEGIN
+                    </div>
+                    <div id="pausedBadge" class="hidden text-[10px] bg-valDecider text-black font-tech font-bold px-2 py-0.5 rounded mt-1 uppercase tracking-widest animate-pulse">
+                        <i class="fa-solid fa-circle-pause mr-1"></i> PAUSED
+                    </div>
+
+                    <!-- Emergency Pause / Dispute Buttons for Teams -->
+                    <div id="teamActionControls" class="flex gap-2 mt-2 hidden">
+                        <button onclick="requestEmergencyPause()" class="bg-amber-500/20 hover:bg-amber-500 text-amber-400 hover:text-black border border-amber-500/40 px-2.5 py-1 rounded text-[10px] font-tech uppercase font-bold transition">
+                            <i class="fa-solid fa-hand"></i> Emergency Pause
+                        </button>
+                        <button onclick="openDisputeModal()" class="bg-valRed/20 hover:bg-valRed text-valRed hover:text-white border border-valRed/40 px-2.5 py-1 rounded text-[10px] font-tech uppercase font-bold transition">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Report Issue
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TEAM B -->
+                <div id="team2Box" class="flex items-center gap-4 w-full md:w-5/12 p-3 rounded-lg border border-white/10 bg-valDark/80 transition-all opacity-70">
+                    <div class="text-left">
+                        <span id="team2BansCount" class="block font-display text-2xl text-valBan font-bold leading-none">0 BANS</span>
+                        <span id="team2PicksCount" class="block font-display text-2xl text-valPick font-bold leading-none">0 PICKS</span>
+                    </div>
+                    <div class="flex-1 min-w-0 text-right">
+                        <div class="flex items-center justify-end gap-2">
+                            <span id="team2PresenceBadge" class="text-[10px] px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded font-tech">OFFLINE</span>
+                            <span id="team2ActionBadge" class="text-xs px-2 py-0.5 bg-white/10 text-gray-300 rounded font-tech tracking-widest uppercase">READY</span>
+                        </div>
+                        <h2 id="team2Name" class="font-display text-3xl font-bold uppercase tracking-wider text-white truncate">BLACK LIST</h2>
+                        <div id="team2Roster" class="text-xs text-gray-400 font-tech truncate">
+                            LeaderA • ProGunner • ClutchGod • AcePlayer • Scout
+                        </div>
+                    </div>
+                    <!-- Team B Logo -->
+                    <div class="w-12 h-12 flex-shrink-0 bg-valNavy border border-valAccent/40 rounded-lg overflow-hidden flex items-center justify-center p-1 relative">
+                        <img id="team2LogoImg" src="https://placehold.co/100x100/00F0FF/FFFFFF?text=B" class="w-full h-full object-contain" alt="Team B Logo" onerror="this.src='https://placehold.co/100x100/00F0FF/FFFFFF?text=B'">
+                        <!-- Online Status Dot -->
+                        <span id="team2StatusDot" class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-red-500 border-2 border-valDark" title="Team B Offline"></span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- SIDE PICK BANNER / INTERACTIVE PANEL -->
+        <div id="sidePickContainer" class="hidden glass-panel p-6 rounded-xl border border-valAccent/50 bg-valNavy/90 text-center animate-bounce-short">
+            <h3 class="font-display text-3xl text-white uppercase tracking-wider mb-2">
+                <i class="fa-solid fa-flag text-valAccent mr-2"></i> <span id="sidePickTitleText">STARTING SIDE SELECTION</span>
+            </h3>
+            <p id="sidePickSubText" class="text-sm font-tech text-gray-300 uppercase tracking-widest mb-6">
+                SELECT STARTING SIDE FOR MAP
+            </p>
+
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-6 max-w-xl mx-auto">
+                <button id="pickSideGRBtn" onclick="chooseSide('GR')" class="w-full sm:w-1/2 p-4 bg-valRed/20 hover:bg-valRed border border-valRed/60 hover:border-valRed text-white rounded-xl flex flex-col items-center gap-2 transition group">
+                    <i class="fa-solid fa-shield-halved text-4xl text-valRed group-hover:text-white"></i>
+                    <span class="font-display text-2xl font-bold uppercase tracking-wider">GLOBAL RISK</span>
+                    <span class="text-xs font-tech text-gray-300 group-hover:text-white uppercase">(DEFENSE SIDE)</span>
+                </button>
+
+                <button id="pickSideBLBtn" onclick="chooseSide('BL')" class="w-full sm:w-1/2 p-4 bg-valAccent/20 hover:bg-valAccent border border-valAccent/60 hover:border-valAccent text-white rounded-xl flex flex-col items-center gap-2 transition group">
+                    <i class="fa-solid fa-crosshairs text-4xl text-valAccent group-hover:text-black"></i>
+                    <span class="font-display text-2xl font-bold uppercase tracking-wider group-hover:text-black">BLACK LIST</span>
+                    <span class="text-xs font-tech text-gray-300 group-hover:text-black uppercase">(ATTACK SIDE)</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- MAP CARDS GRID -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 min-h-[280px]" id="mapGrid">
+            <!-- Map cards injected dynamically via JavaScript -->
+        </div>
+
+        <!-- BOTTOM VETO LOG & SEQUENCE BAR -->
+        <div id="nonObsPanel" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <!-- Sequence Status Bar -->
+            <div class="lg:col-span-2 glass-panel p-4 rounded-xl border border-white/10 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-tech text-xs tracking-widest text-gray-400 uppercase"><i class="fa-solid fa-list-ol text-valRed mr-1"></i> Veto Sequence Order</span>
+                    <div class="flex items-center gap-2">
+                        <button onclick="copyMatchSummary()" class="text-[10px] font-tech text-valAccent bg-valAccent/10 hover:bg-valAccent hover:text-black px-2 py-0.5 rounded border border-valAccent/30 transition">
+                            <i class="fa-solid fa-copy mr-1"></i> Copy Summary
+                        </button>
+                        <button onclick="exportStateJSON()" class="text-[10px] font-tech text-gray-300 bg-white/5 hover:bg-white/20 px-2 py-0.5 rounded border border-white/10 transition">
+                            <i class="fa-solid fa-download mr-1"></i> Export JSON
+                        </button>
+                        <span id="vetoFormatBadge" class="text-xs font-tech text-valAccent bg-valAccent/10 px-2 py-0.5 rounded border border-valAccent/30">BEST OF 3</span>
+                    </div>
+                </div>
+                
+                <!-- Steps Flow Visualization -->
+                <div id="sequenceBar" class="flex items-center gap-1.5 overflow-x-auto py-2 scrollbar-none">
+                    <!-- Sequence items injected by JS -->
+                </div>
+            </div>
+
+            <!-- Audit Log / History -->
+            <div class="glass-panel p-4 rounded-xl border border-white/10 flex flex-col">
+                <div class="flex items-center justify-between mb-2 pb-1 border-b border-white/10">
+                    <span class="font-tech text-xs tracking-widest text-gray-400 uppercase"><i class="fa-solid fa-clock-rotate-left text-valAccent mr-1"></i> Action History</span>
+                    <button onclick="clearHistoryLog()" class="text-[10px] font-tech text-gray-400 hover:text-white uppercase">Clear</button>
+                </div>
+                <div id="historyLog" class="flex-1 h-28 overflow-y-auto space-y-1.5 text-xs font-tech">
+                    <div class="text-gray-500 italic text-center py-4">Veto process initiated. Awaiting first action...</div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer Broadcast Marquee -->
+    <footer class="relative z-20 border-t border-white/10 bg-valDark/90 py-2 px-4 flex items-center justify-between text-xs text-gray-400 font-tech uppercase tracking-widest">
+        <div class="flex items-center gap-4">
+            <span class="flex items-center gap-1.5 text-valRed"><span class="w-2 h-2 rounded-full bg-valRed animate-ping"></span> LIVE VETO</span>
+            <span class="hidden sm:inline text-gray-500">|</span>
+            <span class="hidden sm:inline">CROSSFIRE LEGENDS TOURNAMENT</span>
+        </div>
+        <div class="flex items-center gap-6">
+            <span>TOURNAMENT ACCESS MODE: <span id="footerRoleBadge" class="text-valRed font-semibold">MODERATOR</span></span>
+        </div>
+    </footer>
+
+    <!-- DISPUTE / REPORT MODAL -->
+    <div id="disputeModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="bg-valDark border border-valRed/40 rounded-xl w-full max-w-md p-6 text-center shadow-2xl relative cut-corner-tl">
+            <button onclick="toggleDisputeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="bg-valRed/20 text-valRed w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3 border border-valRed/40">
+                <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+            </div>
+            <h3 class="font-display text-2xl text-white tracking-wider uppercase mb-1">
+                REPORT TECHNICAL ISSUE / DISPUTE
+            </h3>
+            <p class="text-xs font-tech text-gray-400 uppercase tracking-widest mb-4">Send a direct notification alert to the tournament moderator.</p>
+            
+            <textarea id="disputeReasonInput" rows="3" placeholder="Describe the problem (e.g. Player disconnected, lag, wrong map clicked)..." class="w-full bg-valPanel border border-white/20 rounded p-3 text-xs text-white font-tech focus:outline-none focus:border-valRed mb-4 resize-none"></textarea>
+            
+            <div class="flex gap-2">
+                <button onclick="toggleDisputeModal()" class="w-1/2 py-2 bg-white/10 hover:bg-white/20 text-white rounded text-xs font-tech uppercase font-bold">Cancel</button>
+                <button onclick="submitDisputeReport()" class="w-1/2 py-2 bg-valRed hover:bg-red-600 text-white rounded text-xs font-tech uppercase font-bold">Send to Moderator</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- COIN TOSS MODAL -->
+    <div id="coinTossModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="bg-valDark border border-white/10 rounded-xl w-full max-w-md p-6 text-center shadow-2xl relative cut-corner-tl">
+            <!-- Close button only for moderator -->
+            <button onclick="closeCoinTossModal()" id="closeCoinModalBtn" class="absolute top-4 right-4 text-gray-400 hover:text-white text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <h3 class="font-display text-3xl text-white tracking-wider uppercase mb-1">
+                <i class="fa-solid fa-coins text-valDecider mr-2"></i> Priority Coin Flip
+            </h3>
+            <p id="coinModalSubText" class="text-xs font-tech text-gray-400 uppercase tracking-widest mb-6">FLIP TO DECIDE UNANG PICK / BAN PRIORITY</p>
+
+            <div class="flex items-center justify-center my-8">
+                <div id="coinElem" class="coin">
+                    <div class="coin-front">TEAM A</div>
+                    <div class="coin-back">TEAM B</div>
+                </div>
+            </div>
+
+            <div id="coinResultText" class="font-display text-2xl text-valDecider font-bold uppercase tracking-wider min-h-[36px]">
+                PRESS FLIP TO START
+            </div>
+
+            <div class="mt-6 flex justify-center gap-3">
+                <button onclick="flipCoin()" id="flipBtn" class="px-6 py-2.5 bg-valDecider hover:bg-amber-500 text-black font-bold rounded text-xs font-tech uppercase tracking-widest">
+                    FLIP COIN
+                </button>
+                <button onclick="applyCoinWinner()" id="applyCoinBtn" class="hidden px-6 py-2.5 bg-valPick hover:bg-emerald-600 text-white font-bold rounded text-xs font-tech uppercase tracking-widest">
+                    SET FIRST PICK
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONFIGURATION MODAL -->
+    <div id="configModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="bg-valDark border border-white/10 rounded-xl w-full max-w-2xl p-6 shadow-2xl relative cut-corner-tl">
+            <button onclick="toggleConfigModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            
+            <h3 class="font-display text-2xl text-white tracking-wider uppercase mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-sliders text-valRed"></i> Tournament Match Settings
+            </h3>
+
+            <div class="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
+                <!-- Team 1 Setup -->
+                <div class="bg-valPanel p-4 rounded-lg border border-valRed/30">
+                    <h4 class="font-tech text-valRed text-sm uppercase tracking-wider mb-2 font-bold">Team A Setup</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 uppercase mb-1">Team Name</label>
+                            <input type="text" id="inputTeam1Name" value="GLOBAL RISK" class="w-full bg-valDark border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-valRed">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 uppercase mb-1">Logo URL (or Placeholder)</label>
+                            <input type="text" id="inputTeam1Logo" value="https://placehold.co/100x100/FF4655/FFFFFF?text=A" class="w-full bg-valDark border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-valRed">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs text-gray-400 uppercase mb-1">Roster (Comma separated)</label>
+                            <input type="text" id="inputTeam1Roster" value="Sniper1, Rifler2, Captain3, Entry4, Support5" class="w-full bg-valDark border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-valRed">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Team 2 Setup -->
+                <div class="bg-valPanel p-4 rounded-lg border border-valAccent/30">
+                    <h4 class="font-tech text-valAccent text-sm uppercase tracking-wider mb-2 font-bold">Team B Setup</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 uppercase mb-1">Team Name</label>
+                            <input type="text" id="inputTeam2Name" value="BLACK LIST" class="w-full bg-valDark border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-valAccent">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 uppercase mb-1">Logo URL (or Placeholder)</label>
+                            <input type="text" id="inputTeam2Logo" value="https://placehold.co/100x100/00F0FF/FFFFFF?text=B" class="w-full bg-valDark border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-valAccent">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs text-gray-400 uppercase mb-1">Roster (Comma separated)</label>
+                            <input type="text" id="inputTeam2Roster" value="LeaderA, ProGunner, ClutchGod, AcePlayer, Scout" class="w-full bg-valDark border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-valAccent">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Timer Settings -->
+                <div class="bg-valPanel p-4 rounded-lg border border-white/10">
+                    <h4 class="font-tech text-white text-sm uppercase tracking-wider mb-2 font-bold">Match Security & Timer</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 uppercase mb-1">Room Access Code</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="inputAccessCode" value="VETO2026" class="w-full bg-valDark border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-valRed tracking-widest uppercase">
+                                <button type="button" onclick="generateRandomCode()" class="px-3 bg-valAccent/20 hover:bg-valAccent text-valAccent hover:text-black border border-valAccent/40 rounded text-xs font-tech uppercase" title="Generate Random Code">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 uppercase mb-1">Turn Duration (Seconds)</label>
+                            <input type="number" id="inputTimerDuration" value="30" min="5" max="120" class="w-full bg-valDark border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-valRed">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button onclick="toggleConfigModal()" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded text-xs font-tech uppercase tracking-wider">Cancel</button>
+                <button onclick="saveMatchSettings()" class="px-6 py-2 bg-valRed hover:bg-red-600 text-white rounded text-xs font-tech font-bold uppercase tracking-wider">Save & Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOM MAP POOL MODAL -->
+    <div id="customPoolModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="bg-valDark border border-white/10 rounded-xl w-full max-w-2xl p-6 shadow-2xl relative cut-corner-tl">
+            <button onclick="toggleCustomPoolModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            
+            <h3 class="font-display text-2xl text-valDecider tracking-wider uppercase mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-map"></i> Custom Map Pool Selector & Builder
+            </h3>
+            <p class="text-xs font-tech text-gray-400 uppercase tracking-wider mb-4">Check or uncheck maps to customize which maps will be included in the veto match pool.</p>
+
+            <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                <!-- Quick Selection Controls -->
+                <div class="flex items-center justify-between bg-valPanel/80 p-2 rounded border border-white/10 text-xs font-tech uppercase">
+                    <span id="selectedMapsCount" class="text-valDecider font-bold">10 / 10 MAPS SELECTED</span>
+                    <div class="flex gap-2">
+                        <button onclick="toggleSelectAllCustomMaps(true)" class="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded transition">Select All</button>
+                        <button onclick="toggleSelectAllCustomMaps(false)" class="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded transition">Unselect All</button>
+                    </div>
+                </div>
+
+                <!-- Add New Map Form -->
+                <div class="bg-valPanel p-3 rounded-lg border border-white/10 flex flex-wrap gap-2 items-end">
+                    <div class="flex-1 min-w-[150px]">
+                        <label class="block text-xs text-gray-400 uppercase mb-1">Map Name</label>
+                        <input type="text" id="newMapName" placeholder="e.g. HIGHWAY" class="w-full bg-valDark border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-valDecider">
+                    </div>
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="block text-xs text-gray-400 uppercase mb-1">Image URL (Optional)</label>
+                        <input type="text" id="newMapImage" placeholder="https://..." class="w-full bg-valDark border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-valDecider">
+                    </div>
+                    <button onclick="addCustomMap()" class="px-4 py-2 bg-valDecider hover:bg-amber-600 text-black font-bold rounded text-xs font-tech uppercase tracking-wider flex items-center gap-1">
+                        <i class="fa-solid fa-plus"></i> Add Map
+                    </button>
+                </div>
+
+                <!-- Custom Maps List with Checkboxes -->
+                <div id="customMapsContainer" class="space-y-2">
+                    <!-- Dynamic custom map rows with toggle checkboxes -->
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button onclick="toggleCustomPoolModal()" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded text-xs font-tech uppercase tracking-wider">Close</button>
+                <button onclick="applyCustomMapPool()" class="px-6 py-2 bg-valDecider hover:bg-amber-600 text-black font-bold rounded text-xs font-tech uppercase tracking-wider">Apply Selected Pool</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AUDIO/SOUND LOGIC USING TONE.JS & WEB SPEECH TTS -->
+    <script>
+        let audioEnabled = true;
+        let voiceAnnouncerEnabled = true;
+        let banSynth, pickSynth, timerSynth;
+
+        function initAudio() {
+            try {
+                banSynth = new Tone.MembraneSynth().toDestination();
+                pickSynth = new Tone.PolySynth(Tone.Synth).toDestination();
+                timerSynth = new Tone.MetalSynth({
+                    frequency: 200,
+                    envelope: { attack: 0.001, decay: 0.1, release: 0.01 },
+                    harmonicity: 5.1,
+                    resonanceIndex: 32,
+                    octaves: 1.5
+                }).toDestination();
+                timerSynth.volume.value = -20;
+            } catch (e) {
+                console.log("Audio Init Warning:", e);
+            }
+        }
+
+        function playSound(type) {
+            if (!audioEnabled) return;
+            try {
+                if (Tone.context.state !== 'running') {
+                    Tone.start();
+                }
+                if (type === 'ban') {
+                    banSynth.triggerAttackRelease("C2", "8n");
+                } else if (type === 'pick') {
+                    pickSynth.triggerAttackRelease(["C4", "E4", "G4", "B4"], "8n");
+                } else if (type === 'decider') {
+                    pickSynth.triggerAttackRelease(["G4", "C5", "E5"], "4n");
+                } else if (type === 'tick') {
+                    timerSynth.triggerAttackRelease("16n");
+                }
+            } catch (e) {}
+        }
+
+        function speakText(text) {
+            if (!voiceAnnouncerEnabled || !('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function toggleAudio() {
+            audioEnabled = !audioEnabled;
+            const btn = document.getElementById('audioBtn');
+            btn.innerHTML = audioEnabled ? '<i class="fa-solid fa-volume-high text-gray-300"></i>' : '<i class="fa-solid fa-volume-xmark text-gray-500"></i>';
+        }
+
+        function toggleVoiceAnnouncer() {
+            voiceAnnouncerEnabled = !voiceAnnouncerEnabled;
+            const btn = document.getElementById('voiceBtn');
+            btn.innerHTML = voiceAnnouncerEnabled ? '<i class="fa-solid fa-bullhorn text-valAccent"></i>' : '<i class="fa-solid fa-bullhorn text-gray-600"></i>';
+        }
+    </script>
+
+    <!-- CORE VETO ENGINE LOGIC -->
+    <script>
+        // Custom Pool Maps
+        let customPoolMaps = [
+            { id: 'desert', name: 'DESERT', winrate: '55%', played: 180, selected: true, image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80' },
+            { id: 'blackwidow', name: 'BLACKWIDOW', winrate: '53%', played: 210, selected: true, image: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80' },
+            { id: 'powersupply', name: 'POWER SUPPLY', winrate: '50%', played: 95, selected: true, image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=600&q=80' },
+            { id: 'satellite', name: 'SATELLITE', winrate: '47%', played: 64, selected: true, image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80' },
+            { id: 'greece', name: 'GREECE', winrate: '52%', played: 130, selected: true, image: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=600&q=80' },
+            { id: 'ankara', name: 'ANKARA', winrate: '48%', played: 85, selected: true, image: 'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=600&q=80' },
+            { id: 'island', name: 'ISLAND', winrate: '49%', played: 70, selected: true, image: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=600&q=80' },
+            { id: 'port', name: 'PORT', winrate: '51%', played: 128, selected: true, image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=600&q=80' },
+            { id: 'subbase', name: 'SUB BASE', winrate: '54%', played: 142, selected: true, image: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=600&q=80' },
+            { id: 'eagleeye', name: 'EAGLE EYE', winrate: '52%', played: 155, selected: true, image: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80' }
+        ];
+
+        let MAP_POOLS = {
+            cf_sd: JSON.parse(JSON.stringify(customPoolMaps))
+        };
+
+        const FORMAT_SEQUENCES = {
+            BO1: [
+                { action: 'ban', team: 0, label: 'TEAM A BAN 1' },
+                { action: 'ban', team: 1, label: 'TEAM B BAN 1' },
+                { action: 'ban', team: 0, label: 'TEAM A BAN 2' },
+                { action: 'ban', team: 1, label: 'TEAM B BAN 2' },
+                { action: 'ban', team: 0, label: 'TEAM A BAN 3' },
+                { action: 'ban', team: 1, label: 'TEAM B BAN 3' },
+                { action: 'pick', team: 0, label: 'TEAM A PICK MAP' },
+                { action: 'side', team: 1, label: 'TEAM B SIDE PICK', forMapRef: 'last' },
+                { action: 'decider', team: null, label: 'DECIDER MAP' },
+                { action: 'side', team: 0, label: 'TEAM A SIDE PICK', forMapRef: 'decider' }
+            ],
+            BO3: [
+                { action: 'ban', team: 0, label: 'TEAM A BAN 1' },
+                { action: 'ban', team: 1, label: 'TEAM B BAN 1' },
+                { action: 'pick', team: 0, label: 'TEAM A PICK MAP 1' },
+                { action: 'side', team: 1, label: 'TEAM B SIDE', forMapRef: 'last' },
+                { action: 'pick', team: 1, label: 'TEAM B PICK MAP 2' },
+                { action: 'side', team: 0, label: 'TEAM A SIDE', forMapRef: 'last' },
+                { action: 'ban', team: 0, label: 'TEAM A BAN 2' },
+                { action: 'ban', team: 1, label: 'TEAM B BAN 2' },
+                { action: 'decider', team: null, label: 'DECIDER MAP 3' },
+                { action: 'side', team: 0, label: 'TEAM A SIDE', forMapRef: 'decider' }
+            ],
+            BO5: [
+                { action: 'pick', team: 0, label: 'TEAM A PICK MAP 1' },
+                { action: 'side', team: 1, label: 'TEAM B SIDE', forMapRef: 'last' },
+                { action: 'pick', team: 1, label: 'TEAM B PICK MAP 2' },
+                { action: 'side', team: 0, label: 'TEAM A SIDE', forMapRef: 'last' },
+                { action: 'pick', team: 0, label: 'TEAM A PICK MAP 3' },
+                { action: 'side', team: 1, label: 'TEAM B SIDE', forMapRef: 'last' },
+                { action: 'pick', team: 1, label: 'TEAM B PICK MAP 4' },
+                { action: 'side', team: 0, label: 'TEAM A SIDE', forMapRef: 'last' },
+                { action: 'decider', team: null, label: 'DECIDER MAP 5' },
+                { action: 'side', team: 0, label: 'TEAM A SIDE', forMapRef: 'decider' }
+            ]
+        };
+
+        let currentFormat = 'BO3';
+        let activePoolKey = 'cf_sd';
+        let maps = JSON.parse(JSON.stringify(MAP_POOLS.cf_sd));
+        let sequence = FORMAT_SEQUENCES[currentFormat];
+        let currentStepIndex = 0;
+        let vetoFinished = false;
+        let vetoStarted = false;
+        let isTimerPaused = false;
+        let isObsMode = false;
+        let lastPickedMapId = null;
+        let defaultTime = 30;
+        let timeRemaining = 30;
+        let timerInterval = null;
+        let coinWinnerTeamIndex = 0;
+        let currentRole = 'moderator';
+
+        let teams = [
+            { name: 'GLOBAL RISK', roster: 'Sniper1, Rifler2, Captain3, Entry4, Support5', bans: 0, picks: 0, timeoutsLeft: 1, logo: 'https://placehold.co/100x100/FF4655/FFFFFF?text=A' },
+            { name: 'BLACK LIST', roster: 'LeaderA, ProGunner, ClutchGod, AcePlayer, Scout', bans: 0, picks: 0, timeoutsLeft: 1, logo: 'https://placehold.co/100x100/00F0FF/FFFFFF?text=B' }
+        ];
+
+        let activeAccessCode = "VETO2026";
+        let teamPresence = { team1: false, team2: false };
+
+        function verifyAccessCode(e) {
+            e.preventDefault();
+            const inputVal = document.getElementById('accessCodeInput').value.trim().toUpperCase();
+            const selectedLoginRole = document.getElementById('loginRoleSelect').value;
+            const errorMsg = document.getElementById('accessErrorMsg');
+
+            if (inputVal === activeAccessCode) {
+                document.getElementById('accessCodeModal').classList.add('hidden');
+                sessionStorage.setItem('veto_authenticated', 'true');
+                sessionStorage.setItem('veto_role', selectedLoginRole);
+                sessionStorage.setItem('veto_role_locked', 'true');
+
+                // Set role in dropdown and disable role switching
+                const roleSelect = document.getElementById('roleSelect');
+                roleSelect.value = selectedLoginRole;
+                roleSelect.disabled = true; 
+                changeRole();
+
+                // Update team presence check-in
+                if (selectedLoginRole === 'team1') {
+                    teamPresence.team1 = true;
+                    updateTeamPresenceUI();
+                    logHistory(`<span class="text-valPick font-bold">[CHECK-IN]</span> Team A Captain (${teams[0].name}) checked into the lobby.`);
+                } else if (selectedLoginRole === 'team2') {
+                    teamPresence.team2 = true;
+                    updateTeamPresenceUI();
+                    logHistory(`<span class="text-valAccent font-bold">[CHECK-IN]</span> Team B Captain (${teams[1].name}) checked into the lobby.`);
+                } else {
+                    logHistory(`<span class="text-valDecider font-bold">[SECURITY]</span> Room successfully unlocked by ${selectedLoginRole.toUpperCase()}.`);
+                }
+            } else {
+                errorMsg.innerText = "INVALID ACCESS CODE. PLEASE TRY AGAIN.";
+                document.getElementById('accessCodeInput').value = '';
+            }
+        }
+
+        function updateTeamPresenceUI() {
+            const t1Dot = document.getElementById('team1StatusDot');
+            const t1Badge = document.getElementById('team1PresenceBadge');
+            if (teamPresence.team1) {
+                t1Dot.className = 'absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-valDark animate-pulse';
+                t1Badge.className = 'text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-tech';
+                t1Badge.innerText = 'ONLINE';
+            }
+
+            const t2Dot = document.getElementById('team2StatusDot');
+            const t2Badge = document.getElementById('team2PresenceBadge');
+            if (teamPresence.team2) {
+                t2Dot.className = 'absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-valDark animate-pulse';
+                t2Badge.className = 'text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-tech';
+                t2Badge.innerText = 'ONLINE';
+            }
+        }
+
+        function generateRandomCode() {
+            const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+            let code = "";
+            for (let i = 0; i < 6; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            document.getElementById('inputAccessCode').value = code;
+        }
+
+        window.onload = function() {
+            // Check session storage if already unlocked
+            if (sessionStorage.getItem('veto_authenticated') === 'true') {
+                document.getElementById('accessCodeModal').classList.add('hidden');
+                const savedRole = sessionStorage.getItem('veto_role');
+                if (savedRole) {
+                    const roleSelect = document.getElementById('roleSelect');
+                    roleSelect.value = savedRole;
+                    if (sessionStorage.getItem('veto_role_locked') === 'true') {
+                        roleSelect.disabled = true; // Lock role selection
+                    }
+                    if (savedRole === 'team1') teamPresence.team1 = true;
+                    if (savedRole === 'team2') teamPresence.team2 = true;
+                }
+            }
+
+            initAudio();
+            loadGamePool();
+            renderCustomMapsList();
+            changeRole();
+            updateTeamPresenceUI();
+            resetVeto();
+        };
+
+        function toggleOBSMode() {
+            isObsMode = !isObsMode;
+            document.body.classList.toggle('obs-mode', isObsMode);
+            document.getElementById('exitObsBtn').classList.toggle('hidden', !isObsMode);
+        }
+
+        function changeRole() {
+            currentRole = document.getElementById('roleSelect').value;
+            const bannerRoleText = document.getElementById('currentRoleText');
+            const bannerInstruction = document.getElementById('roleInstructionText');
+            const footerBadge = document.getElementById('footerRoleBadge');
+            const teamActionControls = document.getElementById('teamActionControls');
+
+            const setupBtn = document.getElementById('setupTeamsBtn');
+            const resetBtn = document.getElementById('resetVetoBtn');
+            const customBtn = document.getElementById('customPoolBtn');
+            const pauseBtn = document.getElementById('pauseTimerBtn');
+            const coinTossBtn = document.getElementById('coinTossBtn');
+            const obsModeBtn = document.getElementById('obsModeBtn');
+            const formatSelect = document.getElementById('formatSelect');
+            const gamePoolSelect = document.getElementById('gamePoolSelect');
+
+            if (currentRole === 'moderator') {
+                bannerRoleText.innerText = 'MODERATOR (Full Administrative Access)';
+                bannerRoleText.className = 'text-valRed font-bold';
+                bannerInstruction.innerText = 'Full control over match options, timer, map/side veto overrides, and coin toss.';
+                footerBadge.innerText = 'MODERATOR';
+                footerBadge.className = 'text-valRed font-semibold';
+                setupBtn.style.display = 'flex';
+                resetBtn.style.display = 'flex';
+                customBtn.style.display = 'flex';
+                pauseBtn.style.display = 'flex';
+                coinTossBtn.style.display = 'flex';
+                obsModeBtn.style.display = 'flex';
+                formatSelect.style.display = 'block';
+                gamePoolSelect.style.display = 'block';
+                teamActionControls.style.display = 'none';
+            } else if (currentRole === 'team1' || currentRole === 'team2') {
+                const teamName = currentRole === 'team1' ? teams[0].name : teams[1].name;
+                bannerRoleText.innerText = `TEAM ACCESS (${teamName})`;
+                bannerRoleText.className = 'text-valRed font-bold';
+                bannerInstruction.innerText = `You can make map/side selections only during your turn.`;
+                footerBadge.innerText = teamName;
+                footerBadge.className = 'text-valRed font-semibold';
+                setupBtn.style.display = 'none';
+                resetBtn.style.display = 'none';
+                customBtn.style.display = 'none';
+                pauseBtn.style.display = 'none';
+                coinTossBtn.style.display = 'none';
+                obsModeBtn.style.display = 'none';
+                formatSelect.style.display = 'none';
+                gamePoolSelect.style.display = 'none';
+                teamActionControls.style.display = 'flex';
+            } else if (currentRole === 'spectator') {
+                bannerRoleText.innerText = 'SPECTATOR MODE (View-Only)';
+                bannerRoleText.className = 'text-valDecider font-bold';
+                bannerInstruction.innerText = 'Broadcast view mode. Map picks and side selections are locked.';
+                footerBadge.innerText = 'SPECTATOR';
+                footerBadge.className = 'text-valDecider font-semibold';
+                setupBtn.style.display = 'none';
+                resetBtn.style.display = 'none';
+                customBtn.style.display = 'none';
+                pauseBtn.style.display = 'none';
+                coinTossBtn.style.display = 'none';
+                obsModeBtn.style.display = 'flex';
+                formatSelect.style.display = 'none';
+                gamePoolSelect.style.display = 'none';
+                teamActionControls.style.display = 'none';
+            }
+
+            renderMaps();
+            updateTurnHeader();
+        }
+
+        function requestEmergencyPause() {
+            if (vetoFinished || isTimerPaused) return;
+            isTimerPaused = true;
+            document.getElementById('pauseTimerIcon').className = 'fa-solid fa-play';
+            document.getElementById('pauseTimerText').innerText = 'Resume';
+            document.getElementById('pausedBadge').classList.remove('hidden');
+            
+            const teamName = currentRole === 'team1' ? teams[0].name : teams[1].name;
+            speakText(`Emergency pause requested by ${teamName}`);
+            logHistory(`<span class="text-amber-400 font-bold">[EMERGENCY PAUSE]</span> Requested by ${teamName}. Awaiting Moderator review.`);
+            alert(`Emergency Pause requested! The timer has been paused. Please coordinate with the tournament moderator.`);
+        }
+
+        function toggleDisputeModal() {
+            document.getElementById('disputeModal').classList.toggle('hidden');
+        }
+
+        function submitDisputeReport() {
+            const reason = document.getElementById('disputeReasonInput').value.trim();
+            if (!reason) {
+                alert("Please describe the issue before submitting.");
+                return;
+            }
+            const teamName = currentRole === 'team1' ? teams[0].name : (currentRole === 'team2' ? teams[1].name : 'Participant');
+            logHistory(`<span class="text-valRed font-bold">[DISPUTE REPORT]</span> ${teamName}: "${reason}"`);
+            alert("Your dispute report has been sent to the moderator successfully.");
+            document.getElementById('disputeReasonInput').value = '';
+            toggleDisputeModal();
+        }
+
+        function exportVetoResultImage() {
+            copyMatchSummary();
+            alert("Veto summary results copied to clipboard! You can paste this directly into Discord or tournament reports.");
+        }
+
+        function togglePauseTimer() {
+            if (vetoFinished) return;
+            isTimerPaused = !isTimerPaused;
+
+            const icon = document.getElementById('pauseTimerIcon');
+            const text = document.getElementById('pauseTimerText');
+            const badge = document.getElementById('pausedBadge');
+
+            if (isTimerPaused) {
+                icon.className = 'fa-solid fa-play';
+                text.innerText = 'Resume';
+                badge.classList.remove('hidden');
+                logHistory(`<span class="text-valDecider">[MODERATOR]</span> Timer Paused (${timeRemaining}s remaining)`);
+            } else {
+                icon.className = 'fa-solid fa-pause';
+                text.innerText = 'Pause';
+                badge.classList.add('hidden');
+                logHistory(`<span class="text-valPick">[MODERATOR]</span> Timer Resumed`);
+            }
+        }
+
+        function requestTimeout(teamIndex) {
+            if (vetoFinished || teams[teamIndex].timeoutsLeft <= 0) return;
+
+            // Role enforcement for timeout
+            if (currentRole === 'team1' && teamIndex !== 0) return;
+            if (currentRole === 'team2' && teamIndex !== 1) return;
+            if (currentRole === 'spectator') return;
+
+            teams[teamIndex].timeoutsLeft--;
+            timeRemaining = 60; // 60s timeout duration
+            isTimerPaused = false;
+            
+            speakText(`Tactical timeout called by ${teams[teamIndex].name}`);
+            logHistory(`<span class="text-amber-400 font-bold">[TACTICAL TIMEOUT]</span> Called by ${teams[teamIndex].name} (60s)`);
+            
+            updateTeamDisplays();
+            startTimer();
+        }
+
+        function loadGamePool() {
+            const select = document.getElementById('gamePoolSelect');
+            activePoolKey = select.value;
+
+            if (activePoolKey === 'custom') {
+                const activeCustoms = customPoolMaps.filter(m => m.selected !== false);
+                if (activeCustoms.length === 0) {
+                    alert("Please select at least one map in the custom pool modal!");
+                    select.value = 'cf_sd';
+                    activePoolKey = 'cf_sd';
+                    maps = JSON.parse(JSON.stringify(MAP_POOLS.cf_sd));
+                } else {
+                    maps = JSON.parse(JSON.stringify(activeCustoms));
+                }
+            } else {
+                maps = JSON.parse(JSON.stringify(MAP_POOLS[activePoolKey] || MAP_POOLS.cf_sd));
+            }
+            resetVeto();
+        }
+
+        function changeFormat() {
+            currentFormat = document.getElementById('formatSelect').value;
+            document.getElementById('vetoFormatBadge').innerText = currentFormat === 'BO1' ? 'BEST OF 1' : (currentFormat === 'BO3' ? 'BEST OF 3' : 'BEST OF 5');
+            resetVeto();
+        }
+
+        function resetVeto() {
+            currentStepIndex = 0;
+            vetoFinished = false;
+            isTimerPaused = false;
+            vetoStarted = false; // Reset start gate
+            lastPickedMapId = null;
+            sequence = FORMAT_SEQUENCES[currentFormat];
+            
+            teams[0].bans = 0; teams[0].picks = 0;
+            teams[1].bans = 0; teams[1].picks = 0;
+
+            const icon = document.getElementById('pauseTimerIcon');
+            const text = document.getElementById('pauseTimerText');
+            const badge = document.getElementById('pausedBadge');
+            if (icon && text && badge) {
+                icon.className = 'fa-solid fa-pause';
+                text.innerText = 'Pause';
+                badge.classList.add('hidden');
+            }
+
+            maps.forEach(m => {
+                m.status = 'available';
+                m.byTeam = null;
+                m.startSideGR = null;
+                m.startSideBL = null;
+            });
+
+            updateTeamDisplays();
+            renderSequenceBar();
+            renderMaps();
+            clearHistoryLog();
+            logHistory("Map Veto initialized format: " + currentFormat + ". Waiting for Moderator to Start Veto.");
+
+            // Do not auto-start timer until moderator clicks start veto
+            stopTimer();
+            updateTurnHeaderForNotStarted();
+        }
+
+        function updateTurnHeaderForNotStarted() {
+            document.getElementById('phaseIndicator').innerText = "WAITING FOR MODERATOR";
+            
+            const startGate = document.getElementById('startVetoGateContainer');
+            if (currentRole === 'moderator') {
+                startGate.classList.remove('hidden');
+                document.getElementById('statusSubtext').innerText = "CLICK 'START VETO' BUTTON ABOVE";
+            } else {
+                startGate.classList.add('hidden');
+                document.getElementById('statusSubtext').innerText = "WAITING FOR MODERATOR TO START VETO";
+            }
+
+            document.getElementById('timerDisplayContainer').classList.add('hidden');
+            
+            const sideBox = document.getElementById('sidePickContainer');
+            sideBox.classList.add('hidden');
+        }
+
+        function startOfficialVeto() {
+            if (vetoStarted || currentRole !== 'moderator') return;
+            vetoStarted = true;
+            document.getElementById('startVetoGateContainer').classList.add('hidden');
+            document.getElementById('timerDisplayContainer').classList.remove('hidden');
+            logHistory(`<span class="text-valPick font-bold">[MODERATOR]</span> Official Map Veto Started!`);
+            speakText("Map veto has officially started. Good luck to both teams.");
+            updateTurnHeader();
+            startTimer();
+        }
+
+        function updateTurnHeader() {
+            if (!vetoStarted) {
+                updateTurnHeaderForNotStarted();
+                return;
+            }
+
+            const sideBox = document.getElementById('sidePickContainer');
+
+            if (vetoFinished) {
+                document.getElementById('phaseIndicator').innerText = "VETO COMPLETE";
+                document.getElementById('statusSubtext').innerText = "ALL MAPS & STARTING SIDES SET";
+                document.getElementById('team1Box').classList.remove('active-team-card', 'border-valRed/50');
+                document.getElementById('team2Box').classList.remove('active-team-card', 'border-valAccent/50');
+                document.getElementById('team1Box').classList.add('opacity-70');
+                document.getElementById('team2Box').classList.add('opacity-70');
+                sideBox.classList.add('hidden');
+                stopTimer();
+                speakText("Map veto completed. Teams are ready.");
+                return;
+            }
+
+            const step = sequence[currentStepIndex];
+            
+            if (step.action === 'decider') {
+                handleDeciderMap();
+                return;
+            }
+
+            const currentTeam = teams[step.team];
+
+            if (step.action === 'side') {
+                sideBox.classList.remove('hidden');
+                let targetMap = null;
+                if (step.forMapRef === 'decider') {
+                    targetMap = maps.find(m => m.status === 'decider');
+                } else {
+                    targetMap = maps.find(m => m.id === lastPickedMapId);
+                }
+
+                document.getElementById('phaseIndicator').innerText = `STEP ${currentStepIndex + 1}: ${step.label}`;
+                document.getElementById('statusSubtext').innerText = `${currentTeam.name} IS SELECTING STARTING SIDE`;
+                document.getElementById('sidePickTitleText').innerText = `${currentTeam.name}: SELECT STARTING SIDE`;
+                document.getElementById('sidePickSubText').innerText = `CHOOSE DEFENSE (GR) OR ATTACK (BL) FOR ${targetMap ? targetMap.name : 'MAP'}`;
+
+                const canPickSide = isClickAllowedForRole(step);
+                document.getElementById('pickSideGRBtn').disabled = !canPickSide;
+                document.getElementById('pickSideBLBtn').disabled = !canPickSide;
+                document.getElementById('pickSideGRBtn').style.opacity = canPickSide ? '1' : '0.5';
+                document.getElementById('pickSideBLBtn').style.opacity = canPickSide ? '1' : '0.5';
+
+            } else {
+                sideBox.classList.add('hidden');
+                document.getElementById('phaseIndicator').innerText = `STEP ${currentStepIndex + 1}: ${step.label}`;
+                document.getElementById('statusSubtext').innerText = `${currentTeam.name} IS ${step.action === 'ban' ? 'BANNING' : 'PICKING'}`;
+            }
+
+            const t1Box = document.getElementById('team1Box');
+            const t2Box = document.getElementById('team2Box');
+
+            if (step.team === 0) {
+                t1Box.classList.add('active-team-card', 'border-valRed/50');
+                t1Box.classList.remove('opacity-70');
+                t2Box.classList.remove('active-team-card', 'border-valAccent/50');
+                t2Box.classList.add('opacity-70');
+                document.getElementById('team1Glow').style.opacity = '1';
+                document.getElementById('team2Glow').style.opacity = '0.2';
+            } else {
+                t2Box.classList.add('active-team-card', 'border-valAccent/50');
+                t2Box.classList.remove('opacity-70');
+                t1Box.classList.remove('active-team-card', 'border-valRed/50');
+                t1Box.classList.add('opacity-70');
+                document.getElementById('team2Glow').style.opacity = '1';
+                document.getElementById('team1Glow').style.opacity = '0.2';
+            }
+
+            timeRemaining = defaultTime;
+            startTimer();
+            renderMaps();
+        }
+
+        function isClickAllowedForRole(step) {
+            if (currentRole === 'moderator') return true;
+            if (currentRole === 'spectator') return false;
+            if (currentRole === 'team1' && step.team === 0) return true;
+            if (currentRole === 'team2' && step.team === 1) return true;
+            return false;
+        }
+
+        function handleMapClick(mapId) {
+            if (vetoFinished || !vetoStarted) return;
+
+            const map = maps.find(m => m.id === mapId);
+            if (!map || map.status !== 'available') return;
+
+            const step = sequence[currentStepIndex];
+            if (step.action === 'side' || step.action === 'decider') return;
+
+            if (!isClickAllowedForRole(step)) return;
+
+            const actingTeam = step.team;
+            
+            if (step.action === 'ban') {
+                map.status = 'banned';
+                map.byTeam = actingTeam;
+                teams[actingTeam].bans++;
+                playSound('ban');
+                speakText(`${teams[actingTeam].name} banned ${map.name}`);
+                logHistory(`${teams[actingTeam].name} <span class="text-valBan">BANNED</span> ${map.name}`);
+            } else if (step.action === 'pick') {
+                map.status = 'picked';
+                map.byTeam = actingTeam;
+                lastPickedMapId = map.id;
+                teams[actingTeam].picks++;
+                playSound('pick');
+                speakText(`${teams[actingTeam].name} picked ${map.name}`);
+                logHistory(`${teams[actingTeam].name} <span class="text-valPick">PICKED</span> ${map.name}`);
+            }
+
+            currentStepIndex++;
+            updateTeamDisplays();
+            renderSequenceBar();
+
+            if (currentStepIndex < sequence.length) {
+                updateTurnHeader();
+            } else {
+                vetoFinished = true;
+                updateTurnHeader();
+            }
+        }
+
+        function chooseSide(chosenSide) {
+            if (vetoFinished || !vetoStarted) return;
+            const step = sequence[currentStepIndex];
+            if (step.action !== 'side') return;
+
+            if (!isClickAllowedForRole(step)) return;
+
+            let targetMap = null;
+            if (step.forMapRef === 'decider') {
+                targetMap = maps.find(m => m.status === 'decider');
+            } else {
+                targetMap = maps.find(m => m.id === lastPickedMapId);
+            }
+
+            if (!targetMap) return;
+
+            const selectingTeam = step.team;
+
+            if (selectingTeam === 0) {
+                if (chosenSide === 'GR') {
+                    targetMap.startSideGR = 'GR (Defense)';
+                    targetMap.startSideBL = 'BL (Attack)';
+                } else {
+                    targetMap.startSideGR = 'BL (Attack)';
+                    targetMap.startSideBL = 'GR (Defense)';
+                }
+            } else {
+                if (chosenSide === 'BL') {
+                    targetMap.startSideBL = 'BL (Attack)';
+                    targetMap.startSideGR = 'GR (Defense)';
+                } else {
+                    targetMap.startSideBL = 'GR (Defense)';
+                    targetMap.startSideGR = 'BL (Attack)';
+                }
+            }
+
+            playSound('pick');
+            speakText(`${teams[selectingTeam].name} selected ${chosenSide === 'GR' ? 'Global Risk Defense' : 'Black List Attack'} side`);
+            logHistory(`${teams[selectingTeam].name} selected <span class="text-valAccent font-bold">${chosenSide === 'GR' ? 'GLOBAL RISK (DEFENSE)' : 'BLACK LIST (ATTACK)'}</span> for ${targetMap.name}`);
+
+            currentStepIndex++;
+            renderSequenceBar();
+
+            if (currentStepIndex < sequence.length) {
+                updateTurnHeader();
+            } else {
+                vetoFinished = true;
+                updateTurnHeader();
+            }
+        }
+
+        function handleDeciderMap() {
+            const remainingMaps = maps.filter(m => m.status === 'available');
+            if (remainingMaps.length > 0) {
+                const decider = remainingMaps[0];
+                decider.status = 'decider';
+                playSound('decider');
+                speakText(`Decider map is ${decider.name}`);
+                logHistory(`Remaining map <span class="text-valDecider">DECIDER</span> is ${decider.name}`);
+            }
+
+            currentStepIndex++;
+            renderSequenceBar();
+            updateTurnHeader();
+        }
+
+        function renderMaps() {
+            const grid = document.getElementById('mapGrid');
+            grid.innerHTML = '';
+
+            const step = sequence[currentStepIndex];
+            const isMapSelectionTurn = !vetoFinished && step && step.action !== 'side' && step.action !== 'decider';
+            const canInteractCurrentTurn = isMapSelectionTurn && isClickAllowedForRole(step);
+
+            maps.forEach(map => {
+                const card = document.createElement('div');
+                
+                let borderStyle = 'border-white/10 hover:border-white/40';
+                let overlayContent = '';
+                let badgeContent = `<span class="text-[10px] font-tech text-gray-400 bg-black/60 px-2 py-0.5 rounded border border-white/10 flex items-center gap-1">
+                                      <i class="fa-solid fa-chart-line text-valAccent"></i> ${map.winrate || '50%'} WR
+                                    </span>`;
+                let cursorStyle = canInteractCurrentTurn && map.status === 'available' ? 'cursor-pointer' : 'cursor-not-allowed opacity-80';
+
+                if (map.status === 'banned') {
+                    borderStyle = 'border-valBan/60 opacity-60 grayscale';
+                    badgeContent = `<span class="text-[10px] font-tech text-white bg-valBan/80 px-2 py-0.5 rounded uppercase font-bold">BANNED BY ${teams[map.byTeam].name}</span>`;
+                    overlayContent = `
+                        <div class="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-10 pointer-events-none">
+                            <i class="fa-solid fa-xmark text-valBan text-5xl mb-1 drop-shadow"></i>
+                            <span class="font-display text-xl text-valBan font-bold uppercase tracking-wider">BAN</span>
+                        </div>`;
+                } else if (map.status === 'picked') {
+                    const isTeamA = map.byTeam === 0;
+                    const pickColor = isTeamA ? 'border-valRed' : 'border-valAccent';
+                    const textColor = isTeamA ? 'text-valRed' : 'text-valAccent';
+                    borderStyle = `${pickColor} glow-cyan`;
+                    badgeContent = `<span class="text-[10px] font-tech text-white bg-valPick px-2 py-0.5 rounded uppercase font-bold">PICKED BY ${teams[map.byTeam].name}</span>`;
+                    
+                    let sideBadge = map.startSideGR ? `<div class="mt-1 text-[11px] font-tech text-valAccent bg-black/80 px-2 py-0.5 rounded border border-valAccent/30">SIDE: ${map.startSideGR}</div>` : '<div class="mt-1 text-[10px] font-tech text-gray-400 italic">SELECTING SIDE...</div>';
+
+                    overlayContent = `
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-3 z-10 pointer-events-none">
+                            <span class="text-xs font-tech ${textColor} uppercase font-bold tracking-widest flex items-center gap-1">
+                                <i class="fa-solid fa-check"></i> SELECTED
+                            </span>
+                            ${sideBadge}
+                        </div>`;
+                } else if (map.status === 'decider') {
+                    borderStyle = 'border-valDecider glow-gold';
+                    badgeContent = `<span class="text-[10px] font-tech text-black bg-valDecider px-2 py-0.5 rounded uppercase font-bold">DECIDER MAP</span>`;
+                    
+                    let sideBadge = map.startSideGR ? `<div class="mt-1 text-[11px] font-tech text-valAccent bg-black/80 px-2 py-0.5 rounded border border-valAccent/30">SIDE: ${map.startSideGR}</div>` : '<div class="mt-1 text-[10px] font-tech text-gray-400 italic">SELECTING SIDE...</div>';
+
+                    overlayContent = `
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent flex flex-col justify-end p-3 z-10 pointer-events-none">
+                            <span class="text-xs font-tech text-valDecider uppercase font-bold tracking-widest flex items-center gap-1">
+                                <i class="fa-solid fa-trophy"></i> DECIDER
+                            </span>
+                            ${sideBadge}
+                        </div>`;
+                }
+
+                card.className = `map-card relative rounded-xl overflow-hidden bg-valDark border ${borderStyle} ${cursorStyle} flex flex-col justify-between min-h-[200px] cut-corner-br`;
+                
+                if (canInteractCurrentTurn && map.status === 'available') {
+                    card.onclick = () => handleMapClick(map.id);
+                }
+
+                card.innerHTML = `
+                    <img src="${map.image}" class="absolute inset-0 w-full h-full object-cover opacity-50 transition-transform duration-500 hover:scale-110" alt="${map.name}">
+                    <div class="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90"></div>
+                    
+                    ${overlayContent}
+
+                    <!-- Top Card Info -->
+                    <div class="relative z-20 p-2.5 flex items-start justify-between">
+                        ${badgeContent}
+                    </div>
+
+                    <!-- Bottom Map Name -->
+                    <div class="relative z-20 p-3">
+                        <h3 class="font-display text-2xl font-bold tracking-wider text-white leading-none uppercase drop-shadow-md">${map.name}</h3>
+                    </div>
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        function renderSequenceBar() {
+            const bar = document.getElementById('sequenceBar');
+            bar.innerHTML = '';
+
+            sequence.forEach((step, idx) => {
+                const isCurrent = idx === currentStepIndex && !vetoFinished;
+                const isPassed = idx < currentStepIndex || vetoFinished;
+
+                let activeClass = 'bg-white/5 text-gray-400 border-white/10';
+                if (isCurrent) {
+                    activeClass = 'bg-valRed text-white border-valRed animate-pulse scale-105';
+                } else if (isPassed) {
+                    activeClass = 'bg-white/10 text-gray-300 border-white/20';
+                }
+
+                let teamLabel = 'SYSTEM';
+                if (step.team === 0) teamLabel = teams[0].name.substring(0, 8);
+                if (step.team === 1) teamLabel = teams[1].name.substring(0, 8);
+
+                const stepElem = document.createElement('div');
+                stepElem.className = `flex-shrink-0 px-3 py-1.5 rounded border ${activeClass} flex flex-col items-center justify-center min-w-[90px] text-center font-tech transition-all`;
+                stepElem.innerHTML = `
+                    <span class="text-[9px] uppercase tracking-wider text-gray-400 opacity-80">${teamLabel}</span>
+                    <span class="text-xs font-bold uppercase tracking-widest">${step.label}</span>
+                `;
+                bar.appendChild(stepElem);
+            });
+        }
+
+        function updateTeamDisplays() {
+            document.getElementById('team1Name').innerText = teams[0].name;
+            document.getElementById('team1Roster').innerText = teams[0].roster;
+            document.getElementById('team1BansCount').innerText = `${teams[0].bans} BANS`;
+            document.getElementById('team1PicksCount').innerText = `${teams[0].picks} PICKS`;
+            document.getElementById('team1LogoImg').src = teams[0].logo || 'https://placehold.co/100x100/FF4655/FFFFFF?text=A';
+
+            document.getElementById('team2Name').innerText = teams[1].name;
+            document.getElementById('team2Roster').innerText = teams[1].roster;
+            document.getElementById('team2BansCount').innerText = `${teams[1].bans} BANS`;
+            document.getElementById('team2PicksCount').innerText = `${teams[1].picks} PICKS`;
+            document.getElementById('team2LogoImg').src = teams[1].logo || 'https://placehold.co/100x100/00F0FF/FFFFFF?text=B';
+
+            changeRole();
+        }
+
+        // TIMER LOGIC
+        function startTimer() {
+            if (!vetoStarted) return;
+            stopTimer();
+            updateTimerUI();
+
+            timerInterval = setInterval(() => {
+                if (isTimerPaused || !vetoStarted) return;
+
+                timeRemaining--;
+                updateTimerUI();
+
+                if (timeRemaining <= 5 && timeRemaining > 0) {
+                    playSound('tick');
+                }
+
+                if (timeRemaining <= 0) {
+                    stopTimer();
+                    autoBanPick();
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+        }
+
+        function updateTimerUI() {
+            const textElem = document.getElementById('timerText');
+            const circleElem = document.getElementById('timerCircle');
+            
+            textElem.innerText = timeRemaining;
+
+            const strokeDashoffset = 213.6 - (213.6 * timeRemaining) / defaultTime;
+            circleElem.style.strokeDashoffset = strokeDashoffset;
+
+            if (timeRemaining <= 5) {
+                circleElem.style.stroke = '#EF4444';
+                textElem.style.color = '#EF4444';
+            } else {
+                circleElem.style.stroke = '#FF4655';
+                textElem.style.color = '#FFFFFF';
+            }
+        }
+
+        function autoBanPick() {
+            if (vetoFinished) return;
+            const step = sequence[currentStepIndex];
+
+            const prevRole = currentRole;
+            currentRole = 'moderator';
+
+            if (step.action === 'side') {
+                chooseSide('GR');
+            } else {
+                const availableMaps = maps.filter(m => m.status === 'available');
+                if (availableMaps.length > 0) {
+                    logHistory(`<span class="text-valBan">[TIMER EXPIRED]</span> Auto choice applied.`);
+                    handleMapClick(availableMaps[0].id);
+                }
+            }
+
+            currentRole = prevRole;
+        }
+
+        function logHistory(msg) {
+            const history = document.getElementById('historyLog');
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            if (history.children.length === 1 && history.children[0].classList.contains('italic')) {
+                history.innerHTML = '';
+            }
+
+            const item = document.createElement('div');
+            item.className = 'border-b border-white/5 pb-1 flex items-center justify-between text-gray-300';
+            item.innerHTML = `<span>${msg}</span> <span class="text-[10px] text-gray-500">${time}</span>`;
+            
+            history.prepend(item);
+        }
+
+        function clearHistoryLog() {
+            document.getElementById('historyLog').innerHTML = '<div class="text-gray-500 italic text-center py-4">Veto process initiated. Awaiting first action...</div>';
+        }
+
+        // COIN TOSS FEATURE
+        function openCoinTossModal() {
+            document.getElementById('coinTossModal').classList.remove('hidden');
+            document.getElementById('coinElem').style.transform = 'rotateY(0deg)';
+            document.getElementById('coinResultText').innerText = "PRESS FLIP TO START";
+            document.getElementById('applyCoinBtn').classList.add('hidden');
+            
+            const isMod = currentRole === 'moderator';
+            document.getElementById('flipBtn').style.display = isMod ? 'block' : 'none';
+            document.getElementById('closeCoinModalBtn').style.display = isMod ? 'block' : 'none';
+            document.getElementById('coinModalSubText').innerText = isMod ? "FLIP TO DECIDE UNANG PICK / BAN PRIORITY" : "MODERATOR IS INITIATING COIN TOSS...";
+        }
+
+        function closeCoinTossModal() {
+            document.getElementById('coinTossModal').classList.add('hidden');
+        }
+
+        function flipCoin() {
+            if (currentRole !== 'moderator') return;
+            
+            // Broadcast flip state logic
+            const flipBtn = document.getElementById('flipBtn');
+            flipBtn.style.display = 'none';
+
+            const coin = document.getElementById('coinElem');
+            const resultText = document.getElementById('coinResultText');
+            resultText.innerText = "FLIPPING...";
+
+            const winnerIndex = Math.floor(Math.random() * 2);
+            coinWinnerTeamIndex = winnerIndex;
+
+            const extraRotations = (Math.floor(Math.random() * 4) + 5) * 360;
+            const targetRotation = winnerIndex === 0 ? extraRotations : extraRotations + 180;
+
+            coin.style.transform = `rotateY(${targetRotation}deg)`;
+
+            setTimeout(() => {
+                const winnerName = teams[winnerIndex].name;
+                resultText.innerText = `WINNER: ${winnerName}!`;
+                if (currentRole === 'moderator') {
+                    document.getElementById('applyCoinBtn').classList.remove('hidden');
+                }
+                speakText(`Coin flip winner is ${winnerName}`);
+                logHistory(`<span class="text-valDecider">[COIN TOSS WINNER]</span> ${winnerName}`);
+            }, 3000);
+        }
+
+        function applyCoinWinner() {
+            if (currentRole !== 'moderator') return;
+            if (coinWinnerTeamIndex === 1) {
+                const temp = teams[0];
+                teams[0] = teams[1];
+                teams[1] = temp;
+                updateTeamDisplays();
+                logHistory(`<span class="text-valAccent">[PRIORITY SET]</span> ${teams[0].name} gets First Pick priority.`);
+            }
+            closeCoinTossModal();
+            resetVeto();
+        }
+
+        // COPY MATCH SUMMARY & EXPORT JSON
+        function copyMatchSummary() {
+            const pickedMaps = maps.filter(m => m.status === 'picked' || m.status === 'decider');
+            let summaryText = `🏆 [BAKBAKAN SA PINAS VETO SUMMARY - ${currentFormat}]\n`;
+            summaryText += `⚔️ ${teams[0].name} VS ${teams[1].name}\n`;
+            summaryText += `------------------------------------\n`;
+
+            maps.forEach(m => {
+                if (m.status === 'banned') {
+                    summaryText += `❌ BAN: ${m.name} (${teams[m.byTeam].name})\n`;
+                } else if (m.status === 'picked') {
+                    summaryText += `✅ PICK: ${m.name} (${teams[m.byTeam].name}) - Side: ${m.startSideGR || 'TBD'}\n`;
+                } else if (m.status === 'decider') {
+                    summaryText += `🔥 DECIDER: ${m.name} - Side: ${m.startSideGR || 'TBD'}\n`;
+                }
+            });
+
+            const tempInput = document.createElement('textarea');
+            tempInput.value = summaryText;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+
+            alert("Match summary copied to clipboard!\n\n" + summaryText);
+        }
+
+        function exportStateJSON() {
+            const state = {
+                format: currentFormat,
+                teams: teams,
+                maps: maps,
+                currentStepIndex: currentStepIndex,
+                vetoFinished: vetoFinished
+            };
+            const jsonStr = JSON.stringify(state, null, 2);
+            const tempInput = document.createElement('textarea');
+            tempInput.value = jsonStr;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+
+            alert("Match state JSON copied to clipboard!");
+        }
+
+        // CUSTOM POOL MODAL LOGIC
+        function toggleCustomPoolModal() {
+            const modal = document.getElementById('customPoolModal');
+            modal.classList.toggle('hidden');
+            if (!modal.classList.contains('hidden')) {
+                renderCustomMapsList();
+            }
+        }
+
+        function renderCustomMapsList() {
+            const container = document.getElementById('customMapsContainer');
+            container.innerHTML = '';
+
+            const selectedCount = customPoolMaps.filter(m => m.selected !== false).length;
+            document.getElementById('selectedMapsCount').innerText = `${selectedCount} / ${customPoolMaps.length} MAPS SELECTED`;
+
+            customPoolMaps.forEach((map, index) => {
+                const isSelected = map.selected !== false;
+                const row = document.createElement('div');
+                row.className = `p-2.5 rounded border flex items-center justify-between gap-3 transition ${
+                    isSelected 
+                        ? 'bg-valDark border-valDecider/60' 
+                        : 'bg-valDark/40 border-white/5 opacity-60'
+                }`;
+
+                row.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleCustomMapSelection(${index})" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+                        <img src="${map.image}" class="w-10 h-10 object-cover rounded border border-white/10" alt="${map.name}">
+                        <div>
+                            <span class="font-tech uppercase font-bold text-sm ${isSelected ? 'text-white' : 'text-gray-500 line-through'}">${map.name}</span>
+                            <span class="block text-[10px] font-tech text-gray-400">${isSelected ? 'INCLUDED IN MATCH POOL' : 'UNSELECTED'}</span>
+                        </div>
+                    </div>
+                    <button onclick="removeCustomMap(${index})" class="text-gray-500 hover:text-valBan p-1 text-sm transition" title="Delete map permanently">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function toggleCustomMapSelection(index) {
+            customPoolMaps[index].selected = !customPoolMaps[index].selected;
+            renderCustomMapsList();
+        }
+
+        function toggleSelectAllCustomMaps(selectAll) {
+            customPoolMaps.forEach(map => {
+                map.selected = selectAll;
+            });
+            renderCustomMapsList();
+        }
+
+        function addCustomMap() {
+            const nameInput = document.getElementById('newMapName');
+            const imgInput = document.getElementById('newMapImage');
+
+            const name = nameInput.value.trim().toUpperCase();
+            const image = imgInput.value.trim() || 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=600&q=80';
+
+            if (!name) return;
+
+            customPoolMaps.push({
+                id: 'custom_' + Date.now(),
+                name: name,
+                winrate: '50%',
+                played: 10,
+                selected: true,
+                image: image
+            });
+
+            nameInput.value = '';
+            imgInput.value = '';
+            renderCustomMapsList();
+        }
+
+        function removeCustomMap(index) {
+            customPoolMaps.splice(index, 1);
+            renderCustomMapsList();
+        }
+
+        function applyCustomMapPool() {
+            const activeCustoms = customPoolMaps.filter(m => m.selected !== false);
+            if (activeCustoms.length === 0) {
+                alert("Please select at least one map before applying!");
+                return;
+            }
+
+            document.getElementById('gamePoolSelect').value = 'custom';
+            loadGamePool();
+            toggleCustomPoolModal();
+        }
+
+        // SETUP MODAL LOGIC
+        function toggleConfigModal() {
+            const modal = document.getElementById('configModal');
+            modal.classList.toggle('hidden');
+            if (!modal.classList.contains('hidden')) {
+                document.getElementById('inputAccessCode').value = activeAccessCode;
+            }
+        }
+
+        function saveMatchSettings() {
+            teams[0].name = document.getElementById('inputTeam1Name').value || 'GLOBAL RISK';
+            teams[0].logo = document.getElementById('inputTeam1Logo').value || teams[0].logo;
+            teams[0].roster = document.getElementById('inputTeam1Roster').value || teams[0].roster;
+
+            teams[1].name = document.getElementById('inputTeam2Name').value || 'BLACK LIST';
+            teams[1].logo = document.getElementById('inputTeam2Logo').value || teams[1].logo;
+            teams[1].roster = document.getElementById('inputTeam2Roster').value || teams[1].roster;
+
+            const newCode = document.getElementById('inputAccessCode').value.trim().toUpperCase();
+            if (newCode) {
+                activeAccessCode = newCode;
+                logHistory(`<span class="text-valAccent">[SECURITY]</span> Match Access Code updated to: <strong class="text-white">${activeAccessCode}</strong>`);
+            }
+
+            defaultTime = parseInt(document.getElementById('inputTimerDuration').value) || 30;
+
+            toggleConfigModal();
+            resetVeto();
+        }
+    </script>
+</body>
+</html>
